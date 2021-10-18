@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-config
+  namespace: {{ .Values.namespace }}
+data:
+  DB_HOST: "audit.caumgs6t3rec.us-east-2.rds.amazonaws.com"
+  DB_NAME: "AscendAudit"
+  DB_RECORDS_LIMIT: "100"
+  DB_REQUEST_TIMEOUT: "800000"
+  DB_ENCRYPTED: "false"
+  DB_TRUST_SERVER_CERTIFICATE: "false"
+  DB_POOL_MIN: "5"
+  DB_POOL_MAX: "50"
+  DB_POOL_ACQUIRE: "5000"
+  DB_POOL_IDLE: "10000"
+  SWAGGER_ENABLED: "true"
+  STARTUP_TIMEOUT: "60000"
+  SERVER_HTTP_PORT: "8080"
+  SERVER_HTTP_CORS: "true"
+  SERVER_KEEP_ALIVE_TIMEOUT: "9010000"
+  SERVER_HEADERS_TIMEOUT: "902000"
+  API_SWAGGER: "/api-docs"
+  API_PATH: "/api"
+  API_V0: "/v0"
+  API_V1: "/v1"
+  API_HEALTHCHECK: "/health"
+  API_AUDIT: "/audits"
+  LOG_LEVEL: "info"
+  LOG_FOLDER: "../logs"
+  LOG_PRINT_LOGS_TO_CONSOLE: "true"
+  LOG_METRICS_FILE: "metrics.log"
+  LOG_ERROR_FILE: "error.log"
+  LOG_WARN_FILE: "warn.log"
+  LOG_INFO_FILE: "info.log"
+  LOG_CONF_FILE: "Configuration.log"
+  LOG_HTTP_ACCESS_ENABLED: "true"
+  LOG_HTTP_ACCESS_FILE: "httpAccess.log"
+  LOG_HTTP_ACCESS_FORMAT: "Date=\":date-tz[America/Denver]\" ApigeeMessageID=\":req[X-Apigee-Message-Id]\" ForwardedIP=\":req[X-Forwarded-For]\" UserName=\":username\" ApplicationID=\":application_id\" ClientId=\":client_id\" ClientName=\":client_name\" OrgID=\":organizationId\" OrgMapperId=\":orgMapperId\" TransactionID=\":transactionId\" RemoteAddress=\":remote-addr\" URL=\":url\" Method=\":method\" ResponseCode=\":status\" ResponseBytes=\":res[content-length]\" ResponseTime=\":response-time\" TotalTime=\":total-time\""
+  LOG_HTTP_REQUEST_ENABLED: "true"
+  LOG_HTTP_REQUEST_FILE: "httpRequest.log"
+  LOG_HTTP_REQUEST_FORMAT: "Date=\":date-tz[America/Denver]\" ApigeeMessageID=\":req[X-Apigee-Message-Id]\" ForwardedIP=\":req[X-Forwarded-For]\" RemoteAddress=\":remote-addr\" URL=\":url\" Method=\":method\""
+
+
+
+
+
+

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-depl
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: audit
+  template:
+    metadata:
+      labels:
+        app: audit
+    spec:
+      containers:
+        - name: audit
+          image: {{ .Values.registry.url }}/audit:{{ .Values.registry.auditTag }}
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /app/logs
+              name: logs
+          envFrom:
+            - configMapRef:
+                name: audit-config
+            - secretRef:
+                name: audit-secret
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: splunk-persistance-claim
+      imagePullSecrets:
+        - name: audit-ecr-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-srv
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: audit
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 8080

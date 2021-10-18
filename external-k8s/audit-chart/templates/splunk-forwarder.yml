@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: splunk-forwarder-depl
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: splunk-forwarder
+  template:
+    metadata:
+      labels:
+        app: splunk-forwarder
+    spec:
+      initContainers:
+        - name: volume-permissions
+          image: busybox
+          imagePullPolicy: IfNotPresent
+          command: [ 'sh', '-c', 'cp /configs/* /opt/splunkforwarder/etc/system/local/' ]
+          volumeMounts:
+            - mountPath: /configs
+              name: splunk-config-files
+            - name: confs
+              mountPath: /opt/splunkforwarder/etc/system/local
+      containers:
+        - name: splunk-uf
+          image: splunk/universalforwarder:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: splunk-config
+          volumeMounts:
+            - mountPath: /var/log
+              name: container-logs
+            - mountPath: /opt/splunkforwarder/etc/system/local
+              name: confs
+      volumes:
+        - name: container-logs
+          persistentVolumeClaim:
+            claimName: splunk-persistance-claim
+        - name: confs
+          emptyDir: {}
+        - name: splunk-config-files
+          configMap:
+            name: splunk-config-files
+            defaultMode: 0777
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: splunk-config
+data:
+  SPLUNK_START_ARGS: --accept-license
+  SPLUNK_USER: splunk
+  SPLUNK_PASSWORD: audit-forwarder
+  SPLUNK_CMD: add monitor /var/log
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: splunk-config-files
+data:
+  outputs.conf: |-
+    [indexAndForward]
+    index = false
+
+    [tcpout]
+    defaultGroup = splunk-uat
+    forwardedindex.filter.disable = true
+    indexAndForward = false
+
+    [tcpout:splunk-uat]
+    server = 18.218.155.29:9997
+    # Splunk indexer IP and Port
+    useACK = true
+    autoLB = true
+  inputs.conf: |-
+    [monitor:///var/log/*.log]
+    # Where data is read from
+    disabled = false
+    sourcetype = log
+    index = audit_microservice

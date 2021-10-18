@@ -1,0 +1,17 @@
+[
+  {
+    "essential": true,
+    "memory": 512,
+    "name": "balder_main",
+    "cpu": 2,
+    "image": "${REPOSITORY_URL}:latest",
+    "environment": [],
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "protocol": "tcp",
+        "hostPort": 8080
+      }
+    ]
+  }
+]

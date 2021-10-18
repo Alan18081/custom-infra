@@ -1,0 +1,51 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: system-ingress
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+---
+kind: VirtualService
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  name: system-virtual-service
+  namespace: istio-system
+spec:
+  gateways:
+    - system-ingress
+  hosts:
+    - "*"
+  http:
+  - match:
+      - uri:
+          prefix: /kiali
+    route:
+      - destination:
+          host: kiali.istio-system.svc.cluster.local
+          port:
+            number: 20001
+  - match:
+      - uri:
+          prefix: /grafana
+    route:
+      - destination:
+          host: grafana.istio-system.svc.cluster.local
+          port:
+            number: 3000
+  - match:
+      - uri:
+          prefix: /jaeger
+    route:
+      - destination:
+          host: tracing.istio-system.svc.cluster.local
+          port:
+            number: 80

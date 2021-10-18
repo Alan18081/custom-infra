@@ -1,0 +1,35 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: ingress-gateway-configuration
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+---
+kind: VirtualService
+apiVersion: networking.istio.io/v1alpha3
+metadata:
+  name: virtual-service
+  namespace: {{ .Values.namespace }}
+spec:
+  gateways:
+    - ingress-gateway-configuration
+  hosts:
+    - "*"
+  http:
+    - match:
+        - uri:
+            prefix: /{{ .Values.namespace }}/
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: audit-srv.{{ .Values.namespace }}.svc.cluster.local
