@@ -1,0 +1,210 @@
+# Steps
+# 1. Run unit tests (STOPPED)
+# 2. Build project
+image: docker:19.03.8
+
+variables:
+  AWS_ECR_SECRET_NAME: audit-ecr-secret
+  NAMESPACE: $CI_PROJECT_NAME-$CI_BUILD_REF_NAME
+
+stages:
+  - test
+  - build_review
+  - build_staging
+  - generate_token
+  - deploy_review
+  - deploy_staging
+
+build_front:
+  stage: build_review
+  image: node:12
+  only:
+    refs:
+      - merge_requests
+    changes:
+      - frontend/**/*
+  script:
+    - cd ./frontend
+    - npm ci
+    - touch .env.production.local
+    - echo "VUE_APP_AUDIT_SERVICE_URL=$API_URL" >> .env.production.local
+    - echo "VUE_APP_AUDIT_SERVICE_JWT=$API_JWT_TOKEN" >> .env.production.local
+    - cat .env.production.local
+    - npm run build
+  artifacts:
+    paths:
+      - ./frontend/dist
+
+deploy_frontend:
+  stage: deploy_review
+  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  only:
+    refs:
+      - merge_requests
+    changes:
+      - frontend/**/*
+  script:
+    - aws s3 cp ./frontend/dist s3://$AWS_FRONTEND_S3_BUCKET/audit-ui --recursive
+    - aws cloudfront create-invalidation --distribution-id $AWS_FRONTEND_CLOUD_FRONT_DISTRIBUTION_ID --paths "/*"
+  dependencies:
+    - build_front
+
+generate_token:
+  stage: generate_token
+  image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+  only:
+    refs:
+      - master
+      - merge_requests
+  script:
+    - AWS_ECR_TOKEN=`aws ecr --region=$AWS_DEFAULT_REGION get-authorization-token --output text --query authorizationData[].authorizationToken`
+    - echo "$AWS_ECR_TOKEN" >> ecr_token.txt
+  artifacts:
+    paths:
+      - ecr_token.txt
+
+test:
+  stage: test
+  image: node:alpine
+  variables:
+    ACCEPT_EULA: Y
+    SA_PASSWORD: Dentrix1
+  services:
+    - name: mcr.microsoft.com/mssql/server
+      alias: audit-database
+  script:
+    - cd ./api
+    - npm install
+    - npm run apply-schema:ci
+    - npm run test:ci
+    - rm -rf node_modules
+  only:
+    changes:
+      - api/**/*
+    refs:
+      - merge_requests
+      - master
+  artifacts:
+    paths:
+      - api
+
+build_review_api:
+  stage: build_review
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  only:
+    changes:
+      - api/**/*
+    refs:
+      - merge_requests
+  script:
+    - cd ./api
+    - echo $DOCKER_AUTH_CONFIG > /kaniko/.docker/config.json
+    - cat /kaniko/.docker/config.json
+    - /kaniko/executor --context . --dockerfile ./Dockerfile --destination $AWS_ECR_URL:$CI_BUILD_REF_NAME-review
+
+deploy_review_api:
+  stage: deploy_review
+  only:
+    changes:
+      - api/**/*
+      - infra/**/*
+    refs:
+      - merge_requests
+  image:
+    name: bitnami/kubectl
+    entrypoint: [""]
+  environment:
+    name: review/$CI_PROJECT_NAME-$CI_BUILD_REF_NAME
+    url: $DEPLOYMENT_URL/$NAMESPACE/api-docs/
+    on_stop: stop_review
+    action: start
+    kubernetes:
+      namespace: $CI_PROJECT_NAME-$CI_BUILD_REF_NAME
+  before_script:
+    - wget https://get.helm.sh/helm-v3.4.1-linux-amd64.tar.gz
+    - tar xvf helm-v3.4.1-linux-amd64.tar.gz
+    - rm -rf helm-v3.4.1-linux-amd64.tar.gz
+    - ./linux-amd64/helm version
+  script:
+    - NAMESPACE=$(echo "$NAMESPACE" | awk '{print tolower($0)}')
+    - echo $NAMESPACE
+    - AWS_ECR_TOKEN=`cat ./ecr_token.txt`
+    - sed -i "s/NAMESPACE_VAR/$NAMESPACE/g" ./infra/k8s/templates/namespace.yml
+    - kubectl apply -f ./infra/k8s/templates/namespace.yml
+    - kubectl delete secret --ignore-not-found $AWS_ECR_SECRET_NAME --namespace $NAMESPACE
+    - kubectl create secret docker-registry $AWS_ECR_SECRET_NAME --docker-server=$AWS_ECR_URL --docker-username=AWS --docker-password=$AWS_ECR_TOKEN --namespace $NAMESPACE
+    - sed -i "s/NAMESPACE_VAR/$NAMESPACE/g" ./infra/k8s/audit-chart/values.yaml
+    - sed -i "s/IMAGE_TAG_VAR/$CI_BUILD_REF_NAME-review/g" ./infra/k8s/audit-chart/values.yaml
+    - sed -i "s/CHART_NAME_VAR/audit-$NAMESPACE/g" ./infra/k8s/audit-chart/Chart.yaml
+    - ./linux-amd64/helm upgrade -i audit-$NAMESPACE ./infra/k8s/audit-chart --namespace $NAMESPACE
+
+stop_review:
+  stage: deploy_review
+  image:
+    name: bitnami/kubectl
+    entrypoint: [""]
+  only:
+    changes:
+      - api/**/*
+      - infra/**/*
+    refs:
+      - merge_requests
+  variables:
+    GIT_STRATEGY: none
+  environment:
+    name: review/$CI_PROJECT_NAME-$CI_BUILD_REF_NAME
+    url: $DEPLOYMENT_URL/$NAMESPACE/api-docs/
+    action: stop
+    kubernetes:
+      namespace: $CI_PROJECT_NAME-$CI_BUILD_REF_NAME
+  script:
+    - kubectl delete all --all -n $NAMESPACE
+    - kubectl delete namespace $NAMESPACE
+  when: manual
+
+build_staging:
+  stage: build_staging
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  only:
+    changes:
+      - api/**/*
+    refs:
+      - master
+  script:
+    - cd ./api
+    - echo $DOCKER_AUTH_CONFIG > /kaniko/.docker/config.json
+    - cat /kaniko/.docker/config.json
+    - /kaniko/executor --context . --dockerfile ./Dockerfile --destination $AWS_ECR_URL:$CI_BUILD_REF-staging
+
+deploy_staging:
+  stage: deploy_staging
+  only:
+    refs:
+      - master
+  image:
+    name: bitnami/kubectl
+    entrypoint: [""]
+  environment:
+    name: staging
+    url: $DEPLOYMENT_URL/staging
+    kubernetes:
+      namespace: staging
+  before_script:
+    - wget https://get.helm.sh/helm-v3.4.1-linux-amd64.tar.gz
+    - tar xvf helm-v3.4.1-linux-amd64.tar.gz
+    - rm -rf helm-v3.4.1-linux-amd64.tar.gz
+    - ./linux-amd64/helm version
+  script:
+    - AWS_ECR_TOKEN=`cat ./ecr_token.txt`
+    - sed -i "s/NAMESPACE_VAR/staging/g" ./infra/k8s/templates/namespace.yml
+    - kubectl apply -f ./infra/k8s/templates/namespace.yml
+    - kubectl delete secret --ignore-not-found $AWS_ECR_SECRET_NAME --namespace staging
+    - kubectl create secret docker-registry $AWS_ECR_SECRET_NAME --docker-server=$AWS_ECR_URL --docker-username=AWS --docker-password=$AWS_ECR_TOKEN --namespace staging
+    - sed -i "s/NAMESPACE_VAR/staging/g" ./infra/k8s/audit-chart/values.yaml
+    - sed -i "s/IMAGE_TAG_VAR/$CI_BUILD_REF-staging/g" ./infra/k8s/audit-chart/values.yaml
+    - sed -i "s/CHART_NAME_VAR/audit-staging/g" ./infra/k8s/audit-chart/Chart.yaml
+    - ./linux-amd64/helm upgrade -i audit-staging ./infra/k8s/audit-chart --namespace staging
