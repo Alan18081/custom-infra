@@ -1,0 +1,128 @@
+reporting:
+  - module: passfail
+    criteria:
+      - avg-rt of IndexPage>150ms for 10s, stop as failed
+  - module: passfail
+    criteria:
+      My Message: p50 of Sample Label>200ms for 10s, stop as failed
+
+execution:
+  - executor: jmeter
+    concurrency: 10
+    hold-for: 5m
+    ramp-up: 2m
+    steps: 5 # define number of the ramp-up steps
+    scenario: test_scenario
+    criteria:
+      - fail>0%
+      - rt>1ds
+  - executor: jmeter
+    scenario:
+      script: ./demo_blaze.jmx
+scenarios:
+  test_scenario:
+    retrieve-resources: true
+    requests: # Jmeter http samplers
+      - url: https://www.demoblaze.com
+        label: DemoBlaze Homepage
+        method: GET
+        follow-redirects: true
+      - url: https://api.demoblaze.com/login
+        assert-jsonpath:
+          - jsonpath: '$.Items[1].img'
+            expected-value: 'imgs/Lumia_1520.jpg'
+        label: Login
+        method: POST
+        body: '{ "username": "username1", "password": "${__base64Encode(password1,)}" }'
+    headers:
+      Accept: '*/*'
+      Origin: 'http://www.demoblaze.com'
+      Content-Type: application/json
+      Referer: 'http://www.demoblaze.com'
+      Accept-Encoding: 'gzip, deflate, br'
+    think-time: 1s500ms
+    retrieve-resources-regex: ^((?!google|facebook).)*$
+    concurrent-pool-size: 6
+    criteria:
+      - fail>50%
+      - p90>250ms
+  script_example:
+    script: ./demoblaze_homepage.jmx
+  image_extract_example:
+    think-time: 1s500ms
+    requests:
+      - url: https://api.demoblaze.com/entries
+        label: Entries API
+        method: GET
+        follow-redirects: true
+        extract-boundary:
+          imagename: # name of variable that will be used later
+            subject: body # response object extract from
+            left: '"img":' # condition to find
+            right: '","price' # condition to find
+            match-no: 0 # if match-no == 0 then random found value will be found, match-no > 0 then indexed value will be found
+            default: NO IMAGE FOUND # default value to be used
+      - url: https://www.demoblaze.com/${imagename}
+        label: ${imagename} Image Download
+modules:
+  jmeter:
+    send-to-blazemeter: true # keep class value for jmeter module
+    properties:
+      global_property: some_value
+    path: ./path/to/the/jmeter
+    detect-plugins: true
+    force-ctg: true
+    download-link: url-to-download
+    gui: false
+    plugins:
+      jmeter-ftp
+  blazemeter:
+    token: <API Key ID>:<API Key Secret>
+    address: https://a.blazemeter.com # reporting service address
+    data-address: https://data.blazemeter.com # data service address
+    browser-open: start # "start", "end", "both", "none"
+    send-interval: 30s # send data each n-th second
+    timeout: 5s # connect and request timeout for BlazeMeter API
+    artifact-upload-size-limit: 5 # limit max size of file (in MB) that goes into zip for artifact upload, 10 by default
+    public-report: false # set to true to create a public link to the report
+    report-name: My Local Test Run # if you will use value "ask", it will ask it from cmd line
+    test: test important # test name
+    project: my-project # project name
+  cloud:
+    token: <API Key ID>:<API Key Secret>
+    timeout: 10s # BlazeMeter API client timeout
+    browser-open: start # "start", "end", "both", "none"
+    check-interval: 5s
+    public-report: false
+    send-report-email: false
+    request-logging-limit: 10240
+    account: 56565776 # numeric identifier of the account
+    workspace: Workspace name
+    project: Taurus project
+    test: Example test
+services:
+  - module: shellexec
+    prepare:
+      - mkdir /tmp/test
+    startup:
+      - echo 1 > /tmp/test
+      - echo 2 > /tmp/test
+    check:
+      - echo "test is still running"
+    shutdown:
+      - cat /tmp/test2
+    post-process:
+      - rm /tmp/test1
+      - rm /tmp/test2
+  - module: shellexec
+    prepare: # stage names: [prepare, startup, check]
+      - command: echo 1 > /tmp/1.txt && sleep 1 # task command
+        background: true # wait for task completion or send it to background, false by default
+        ignore-failure: true # false by default, otherwise will shutdown tests if command return != 0
+        out: taskout.txt # set file name for task stdout, null o print to stdout
+        err: taskerr.txt # set file name for task stderr, null to print to stdout
+        run-at: local # provisioning level to limit command usage, null to run always
+        cwd: artifacts-dir # option to change working dir for command, null to not change it
+        end: # environment variables to set for command
+          VAR1: val1
+          VAR2: val2

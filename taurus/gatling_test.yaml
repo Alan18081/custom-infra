@@ -1,0 +1,30 @@
+execution:
+  - executor: gatling
+    iterations: 15
+    concurrency: 3
+    ramp-up: 2
+    hold-for: 10
+    scenario: complex_sample
+scenarios:
+  complex_sample:
+    data-sources:
+      - path: buyouts.csv
+        delimiter: ','
+        loop: true
+    default-address: blazedemo.com
+    headers:
+      HEADER_1: VALUE_1
+    requests:
+      - url: /
+        assert:
+          - subject: body
+            regexp: true
+            not: true
+            contains:
+              - .+sometext.+
+        body: 'Some Body Data'
+        follow-redirects: true
+        headers:
+          HEADER_11: VALUE_11
+      - url: /reserve.php
+        think-time: 2s

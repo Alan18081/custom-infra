@@ -1,9 +1,0 @@
-namespace: NAMESPACE_VAR
-aws:
-  accountID: 660083024328
-efs:
-  fileSystemID: fs-3d19c646
-  basePath: /NAMESPACE_VAR
-registry:
-  url: 660083024328.dkr.ecr.us-east-2.amazonaws.com
-  auditTag: IMAGE_TAG_VAR

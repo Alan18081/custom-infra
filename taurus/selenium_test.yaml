@@ -1,0 +1,15 @@
+execution:
+  - executor: selenium
+    concurrency: 1
+    iterations: 1
+    scenario: selenium_sample
+    capabilities:
+      browserName: chrome # driver
+
+scenarios:
+  selenium_simple:
+    requests:
+      - url: https://www.demoblaze.com
+        label: HomePage
+        actions:
+          - pauseFor(2s)

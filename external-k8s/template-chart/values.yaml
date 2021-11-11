@@ -1,0 +1,9 @@
+namespace: NAMESPACE_VAR
+aws:
+  accountID: account-id
+efs:
+  fileSystemID: elastic-filesystem-id
+  basePath: /NAMESPACE_VAR
+registry:
+  url:  {account-id}.dkr.ecr.us-east-2.amazonaws.com
+  auditTag: IMAGE_TAG_VAR
